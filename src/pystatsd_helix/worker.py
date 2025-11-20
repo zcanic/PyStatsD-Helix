@@ -7,7 +7,8 @@ import random
 import signal
 import sys
 import time
-from typing import List, Optional
+import socket
+from typing import List, Optional, Any
 
 # Try to import uvloop
 try:
@@ -28,9 +29,10 @@ class Worker:
     Independent Worker process.
     Runs its own event loop, aggregator, and backends.
     """
-    def __init__(self, worker_id: int, config: ServerConfig):
+    def __init__(self, worker_id: int, config: ServerConfig, heartbeat_shared_value: Any = None):
         self.worker_id = worker_id
         self.config = config
+        self.heartbeat_shared_value = heartbeat_shared_value
         self.logger = logging.getLogger(f"worker.{worker_id}")
         self._shutdown_event = asyncio.Event()
         
@@ -90,6 +92,17 @@ class Worker:
                 local_addr=(self.config.host, self.config.port),
                 reuse_port=reuse_port
             )
+            
+            # Optimize socket buffer
+            sock = self.transport.get_extra_info('socket')
+            if sock and self.config.socket_buffer_size:
+                try:
+                    sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, self.config.socket_buffer_size)
+                    actual_buf = sock.getsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF)
+                    self.logger.info(f"UDP Receive Buffer set to: {actual_buf} bytes (requested: {self.config.socket_buffer_size})")
+                except Exception as e:
+                    self.logger.warning(f"Failed to set SO_RCVBUF: {e}")
+
             self.logger.info(f"Listening on UDP {self.config.host}:{self.config.port}")
         except Exception as e:
             self.logger.critical(f"Failed to bind UDP port: {e}")
@@ -142,6 +155,10 @@ class Worker:
         Periodically flush metrics to backends.
         """
         while not self._shutdown_event.is_set():
+            # Update shared heartbeat timestamp
+            if self.heartbeat_shared_value:
+                self.heartbeat_shared_value.value = time.time()
+
             # Jitter
             interval = self.config.flush_interval * random.uniform(0.95, 1.05)
             try:
@@ -171,7 +188,7 @@ class Worker:
                 self.logger.error(f"Error in flush loop: {e}", exc_info=True)
 
 
-def run_worker_process(config: ServerConfig, worker_id: int) -> None:
+def run_worker_process(config: ServerConfig, worker_id: int, heartbeat_shared_value: Any = None) -> None:
     """
     Entry point called by multiprocessing.Process.
     """
@@ -190,7 +207,7 @@ def run_worker_process(config: ServerConfig, worker_id: int) -> None:
         logging.warning("uvloop not found! Falling back to standard asyncio loop. Performance will be degraded.")
 
     # 3. Run Worker
-    worker = Worker(worker_id, config)
+    worker = Worker(worker_id, config, heartbeat_shared_value)
     try:
         asyncio.run(worker.run())
     except KeyboardInterrupt:

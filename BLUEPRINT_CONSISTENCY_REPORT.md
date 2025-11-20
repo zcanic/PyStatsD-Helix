@@ -90,3 +90,12 @@ MVP 核心功能与部署设施已就绪。接下来的工作重点转向质量�
 2.  **完善 Health Check**: 实现 Worker 到 Supervisor 的 IPC 状态上报，以支持深度的 Readiness Check。
 
 ---
+
+. 不足与风险 (Weaknesses & Risks)
+为了保持公允，必须指出当前的短板：
+
+后端生态尚浅：目前仅实现了 Logger 和 Graphite 后端。虽然设计了插件系统，但缺乏像 Datadog、InfluxDB、Prometheus Remote Write 这样在现代云原生环境更主流的后端支持。
+
+动态插件加载未完全实现：代码显示 src/pystatsd_helix/backends/loader.py 中对于外部插件的加载仍有 TODO，目前依赖硬编码的 BUILTINS。这意味着社区扩展性目前还受限。
+
+多进程监控的复杂性：虽然实现了 Prometheus 的 multiprocess 模式，但在容器化环境中（特别是 Kubernetes），管理多进程的指标临时文件目录（PROMETHEUS_MULTIPROC_DIR）往往是一个运维坑，需要更详细的部署文档支持。

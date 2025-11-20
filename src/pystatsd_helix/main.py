@@ -31,12 +31,14 @@ class WorkerProcess(mp.Process):
         super().__init__(name=f"Worker-{worker_id}")
         self.worker_id = worker_id
         self.config = config
+        # Shared memory value for heartbeat timestamp (double)
+        self.heartbeat_ts = mp.Value('d', time.time())
         # Ensure daemon is False so signals propagate correctly and we can join them
         self.daemon = False
 
     def run(self) -> None:
         # This runs in the child process
-        run_worker_process(self.config, self.worker_id)
+        run_worker_process(self.config, self.worker_id, self.heartbeat_ts)
 
 
 class Supervisor:
@@ -87,17 +89,29 @@ class Supervisor:
 
     def check_workers_health(self) -> bool:
         """
-        Check if all worker processes are alive.
-        Returns False if any worker has died unexpectedly.
+        Check if all worker processes are alive and healthy.
+        Returns False if any worker has died unexpectedly or is stuck.
         """
         if not self.processes:
             # If no processes started yet, we are not ready
             return False
             
+        now = time.time()
+        # Allow 3 missed heartbeats + 5s buffer
+        timeout_threshold = (self.config.flush_interval * 3) + 5.0
+        
         for p in self.processes:
             if not p.is_alive():
                 logger.error(f"Worker {p.worker_id} (PID: {p.pid}) is dead!")
                 return False
+            
+            # Check heartbeat timestamp
+            last_beat = p.heartbeat_ts.value
+            if now - last_beat > timeout_threshold:
+                logger.error(f"Worker {p.worker_id} (PID: {p.pid}) is stuck! Last heartbeat: {now - last_beat:.1f}s ago")
+                return False
+                
+        return True
         return True
 
     def stop(self, reason: str, timeout: float = SHUTDOWN_TIMEOUT) -> None:

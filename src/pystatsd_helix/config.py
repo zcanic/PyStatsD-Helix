@@ -88,6 +88,12 @@ class ServerConfig(BaseModel):
     # Cardinality Guard
     max_series: int = Field(default=10000, ge=100, description="Maximum number of unique time series per worker")
 
+    # Network Tuning
+    socket_buffer_size: int | None = Field(
+        default=4 * 1024 * 1024, 
+        description="UDP receive buffer size in bytes. Set to 0 or None to use OS default."
+    )
+
     # Observability
     obs_host: str = "0.0.0.0"
     obs_port: int = Field(default=9102, ge=1, le=65535)

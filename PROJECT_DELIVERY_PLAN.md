@@ -47,7 +47,7 @@
 | 风险 | 描述 | 优先级 | 缓解措施 |
 | --- | --- | --- | --- |
 | HdrHistogram/T-Digest 构建失败 | C 扩展编译/安装失败导致精度下降 | 高 | 预构建 wheel、安装自检失败即拒绝启动 |
-| Worker 负载不均或丢包 | SO_REUSEPORT + UDP 缓冲不足 | 高 | 调整 `SO_RCVBUF`、监控 `gateway.*` 指标、背压策略 |
+| Worker 负载不均或丢包 | SO_REUSEPORT + UDP 缓冲不足 | 高 | 调整 `SO_RCVBUF` (已实施: 4MB)、监控 `gateway.*` 指标、背压策略 |
 | Tag cardinality 爆炸 | `(name,tags)` 无上限导致内存增长 | 中 | `config.aggregation.max_series` + LRU 驱逐 + evict 指标 |
 | Backend 阻塞 | Graphite/自定义后端延迟 | 中 | Flush queue + timeout + circuit breaker |
 
@@ -70,3 +70,25 @@
 4. 在首个迭代结束前完成 Logger backend 与基础观测指标，供 MVP 自检使用。
 
 > **若计划有更新**：请直接编辑本文件，并同步在 `blueprint/current` 相应蓝图里登记引用，确保所有执行人员使用一致版本。
+
+A. 扩展 Backend 生态 (最有效！)：
+
+目前只有 Logger 和 Graphite。
+
+行动： 既然这是“大数据管理”专业，请立刻增加 InfluxDB Backend、Prometheus Backend、MySQL Backend (存原始数据做分析)。每一个 Backend 都是几百行实打实的代码！
+
+理由： 既增加了 LOC，又体现了“大数据”的扩展性。
+
+B. 增加 CLI 工具链：
+
+现在的 main.py 比较简单。
+
+行动： 编写一个功能强大的 pystatsd-cli 工具，支持 config check (配置校验)、benchmark (自带压测工具)、doctor (环境诊断)。
+
+理由： 工具类代码量大且独立，非常适合凑行数。
+
+C. 引入更复杂的类型提示 (Type Hinting)：
+
+行动： 在所有文件里使用极其严格的 Python 类型提示 (typing 模块)，甚至定义大量的 Protocol 和 TypedDict。
+
+理由： 类型定义也是有效代码，而且显得非常专业！

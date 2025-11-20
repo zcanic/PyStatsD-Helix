@@ -22,3 +22,7 @@ full_output*.txt
 smoke_metrics.log
 prometheus_multiproc/
 temp_metrics/
+# Benchmark artifacts
+bench_*.txt
+metrics_*.txt
+temp_metrics_bench/

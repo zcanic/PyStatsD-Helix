@@ -12,6 +12,9 @@ active_backends = ["logger"]  # 可选: ["logger", "graphite"]
 max_series = 100000  # 每 worker 最大时间序列数
 max_packet_size = 65535
 
+# Network Tuning
+socket_buffer_size = 4194304 # 4MB UDP 接收缓冲区，设为 0 使用系统默认
+
 # Timer Histogram 配置 (min_ms, max_ms, significant_figures)
 timer_histogram_config = [1, 3600000, 3]
 
