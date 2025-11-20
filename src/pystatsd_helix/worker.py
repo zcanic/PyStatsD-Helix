@@ -126,7 +126,8 @@ class Worker:
             
         # Final flush
         self.logger.info("Performing final flush...")
-        final_batch = self.aggregator.flush(time.monotonic_ns(), time.time())
+        self.aggregator.rotate_buffer()
+        final_batch = await self.aggregator.process_buffer(time.monotonic_ns(), time.time())
         await self.dispatcher.submit(final_batch)
         await self.dispatcher.drain()
         
@@ -152,7 +153,12 @@ class Worker:
                 now = time.monotonic_ns()
                 timestamp = time.time()
                 
-                batch = self.aggregator.flush(now, timestamp)
+                # 双缓冲 Flush 流程
+                # 1. 快速旋转 Buffer (Sync, Atomic)
+                self.aggregator.rotate_buffer()
+                
+                # 2. 异步处理旧 Buffer (Async, Yieldable)
+                batch = await self.aggregator.process_buffer(now, timestamp)
                 
                 if self.dispatcher:
                     await self.dispatcher.submit(batch)

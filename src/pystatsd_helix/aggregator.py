@@ -71,8 +71,34 @@ class AggregatorStats:
     evictions: int
 
 
+class MetricBucket:
+    """
+    存储聚合指标的容器，用于双缓冲机制。
+    """
+    __slots__ = (
+        "counters",
+        "gauges",
+        "timers",
+        "sets",
+        "lru_tracker",
+        "metrics_received",
+        "metrics_dropped",
+        "evictions",
+    )
+
+    def __init__(self) -> None:
+        self.counters: dict[str, float] = defaultdict(float)
+        self.gauges: dict[str, float] = {}
+        self.timers: dict[str, HdrHistogram] = {}
+        self.sets: dict[str, set] = defaultdict(set)
+        self.lru_tracker: OrderedDict[str, int] = OrderedDict()
+        self.metrics_received: int = 0
+        self.metrics_dropped: int = 0
+        self.evictions: int = 0
+
+
 class Aggregator:
-    """单 worker 内存聚合器 - 使用 HdrHistogram 精确聚合"""
+    """单 worker 内存聚合器 - 使用 HdrHistogram 精确聚合与双缓冲机制"""
 
     def __init__(
         self,
@@ -94,17 +120,11 @@ class Aggregator:
         self._hist_max = max_val
         self._hist_sigfigs = sigfigs
 
-        # 聚合状态 - 使用 HdrHistogram
-        self._counters: dict[str, float] = defaultdict(float)
-        self._gauges: dict[str, float] = {}
-        # Timer 使用 HdrHistogram 实例
-        self._timers: dict[str, HdrHistogram] = {}
-        self._sets: dict[str, set] = defaultdict(set)
+        # 双缓冲状态
+        self._active_bucket = MetricBucket()
+        self._flush_bucket: MetricBucket | None = None
         
-        # LRU Tracker: key -> last_access_time (or just order)
-        # OrderedDict is useful for LRU
-        self._lru_tracker: OrderedDict[str, int] = OrderedDict()
-        self._metrics_received = 0
+        self._window_start_ns = time.monotonic_ns()
 
         # Metrics
         self.metrics = MetricRegistry()
@@ -126,58 +146,58 @@ class Aggregator:
 
     def receive(self, metric: Metric) -> None:
         """
-        接收并聚合单个 Metric
-
-        Args:
-            metric: 待聚合的指标对象
+        接收并聚合单个 Metric 到当前活跃桶
         """
         self.received_total.labels(type=metric.type.value).inc()
+        bucket = self._active_bucket
+        bucket.metrics_received += 1
 
         # Cardinality Guard with LRU eviction
         metric_key = metric.name
         total_series = (
-            len(self._counters)
-            + len(self._gauges)
-            + len(self._timers)
-            + len(self._sets)
+            len(bucket.counters)
+            + len(bucket.gauges)
+            + len(bucket.timers)
+            + len(bucket.sets)
         )
 
-        if metric_key not in self._lru_tracker and total_series >= self.max_series:
+        if metric_key not in bucket.lru_tracker and total_series >= self.max_series:
             # 达到上限，驱逐最老的 series
-            if self._lru_tracker:
-                evict_key, _ = self._lru_tracker.popitem(last=False)
+            if bucket.lru_tracker:
+                evict_key, _ = bucket.lru_tracker.popitem(last=False)
                 # 从对应存储中删除
-                self._counters.pop(evict_key, None)
-                self._gauges.pop(evict_key, None)
-                self._timers.pop(evict_key, None)
-                self._sets.pop(evict_key, None)
-                self._evictions += 1
+                bucket.counters.pop(evict_key, None)
+                bucket.gauges.pop(evict_key, None)
+                bucket.timers.pop(evict_key, None)
+                bucket.sets.pop(evict_key, None)
+                bucket.evictions += 1
                 
-                if self._evictions % 100 == 0:
+                if bucket.evictions % 100 == 0:
                     logger.warning(
                         "[worker-%d] Evicted %d series due to cardinality limit",
                         self.worker_id,
-                        self._evictions,
+                        bucket.evictions,
                     )
             else:
                 # 无法驱逐，丢弃
-                self._metrics_dropped += 1
+                bucket.metrics_dropped += 1
+                self.dropped_total.labels(reason="cardinality_limit").inc()
                 return
 
         # 更新 LRU
-        if metric_key in self._lru_tracker:
-            self._lru_tracker.move_to_end(metric_key, last=True)
-        self._lru_tracker[metric_key] = self._metrics_received
+        if metric_key in bucket.lru_tracker:
+            bucket.lru_tracker.move_to_end(metric_key, last=True)
+        bucket.lru_tracker[metric_key] = bucket.metrics_received
 
         try:
             if metric.type == MetricType.COUNTER:
-                self._counters[metric.name] += metric.value  # type: ignore
+                bucket.counters[metric.name] += metric.value  # type: ignore
             elif metric.type == MetricType.GAUGE:
-                self._gauges[metric.name] = metric.value  # type: ignore
+                bucket.gauges[metric.name] = metric.value  # type: ignore
             elif metric.type == MetricType.TIMER:
                 # 使用 HdrHistogram
-                if metric.name not in self._timers:
-                    self._timers[metric.name] = HdrHistogram(
+                if metric.name not in bucket.timers:
+                    bucket.timers[metric.name] = HdrHistogram(
                         self._hist_min,
                         self._hist_max,
                         self._hist_sigfigs,
@@ -185,16 +205,16 @@ class Aggregator:
                 # 记录值（单位：毫秒，转为整数）
                 value_int = int(metric.value)  # type: ignore
                 if self._hist_min <= value_int <= self._hist_max:
-                    self._timers[metric.name].record_value(value_int)
+                    bucket.timers[metric.name].record_value(value_int)
                 else:
                     # 超出范围的值记录到边界
                     if value_int < self._hist_min:
-                        self._timers[metric.name].record_value(self._hist_min)
+                        bucket.timers[metric.name].record_value(self._hist_min)
                     else:
-                        self._timers[metric.name].record_value(self._hist_max)
+                        bucket.timers[metric.name].record_value(self._hist_max)
                         
             elif metric.type == MetricType.SET:
-                self._sets[metric.name].add(str(metric.value))  # type: ignore
+                bucket.sets[metric.name].add(str(metric.value))  # type: ignore
         except Exception as e:
             logger.error(
                 "[worker-%d] Aggregator receive error: %s",
@@ -202,39 +222,78 @@ class Aggregator:
                 e,
                 exc_info=True,
             )
-            self._metrics_dropped += 1
+            bucket.metrics_dropped += 1
+            self.dropped_total.labels(reason="exception").inc()
 
-    def flush(self, now_ns: int, timestamp: float) -> AggregatedBatch:
+    def rotate_buffer(self) -> None:
         """
-        生成当前窗口的聚合快照并重置状态
+        切换活跃缓冲到 Flush 缓冲。
+        此操作必须是同步且原子的，以避免阻塞数据接收。
+        """
+        # 如果上一个 flush 还没处理完，我们不得不丢弃它或者合并？
+        # 简单起见，如果 flush_bucket 非空，说明处理太慢，我们覆盖它（丢数据）并报警。
+        # 或者我们假设调用者保证 process_buffer 已经完成。
+        # 在 worker loop 中，我们 await process_buffer，所以这里应该是安全的。
+        
+        if self._flush_bucket is not None:
+            logger.warning("[worker-%d] Flush buffer not cleared! Overwriting previous batch.", self.worker_id)
+            self.dropped_total.labels(reason="flush_overflow").inc()
+            
+        self._flush_bucket = self._active_bucket
+        self._active_bucket = MetricBucket()
+        
+        # 记录当前窗口开始时间，供下一次使用
+        # 注意：Batch 的 window_start 是上一次 rotate 的时间
+        # Batch 的 window_end 是现在
+        self._last_window_start_ns = self._window_start_ns
+        self._window_start_ns = time.monotonic_ns()
 
+    async def process_buffer(self, window_end_ns: int, timestamp: float) -> AggregatedBatch:
+        """
+        异步处理 Flush 缓冲中的数据，生成 AggregatedBatch。
+        
         Args:
-            now_ns: 当前单调时间 (ns)
+            window_end_ns: 当前窗口结束时间 (ns)
             timestamp: 当前挂钟时间 (s)
-
+            
         Returns:
-            AggregatedBatch: 聚合结果
+            AggregatedBatch
         """
-        # now_ns = time.monotonic_ns()  <-- Removed
+        bucket = self._flush_bucket
+        if bucket is None:
+            # Should not happen if rotate called before
+            return AggregatedBatch(
+                worker_id=self.worker_id,
+                window_start_ns=self._window_start_ns,
+                window_end_ns=window_end_ns,
+            )
 
         # 更新活跃系列数指标
-        total_series = len(self._counters) + len(self._gauges) + len(self._timers)
+        total_series = len(bucket.counters) + len(bucket.gauges) + len(bucket.timers)
         self.series_gauge.labels(worker_id=str(self.worker_id)).set(total_series)
 
         # 构建 Snapshots
-        counter_snaps = {
-            name: CounterSnapshot(value=value, count=1, sample_rate=1.0)
-            for name, value in self._counters.items()
-        }
+        # 引入 yield point 以防止阻塞 event loop
+        # 每处理一定数量的 metrics yield 一次
+        YIELD_EVERY = 1000
+        processed_count = 0
 
-        gauge_snaps = {
-            name: GaugeSnapshot(value=value, last_seen_ns=now_ns)
-            for name, value in self._gauges.items()
-        }
+        counter_snaps = {}
+        for name, value in bucket.counters.items():
+            counter_snaps[name] = CounterSnapshot(value=value, count=1, sample_rate=1.0)
+            processed_count += 1
+            if processed_count % YIELD_EVERY == 0:
+                await asyncio.sleep(0)
 
-        # Timer 快照 - 使用 HdrHistogram 精确百分位
+        gauge_snaps = {}
+        for name, value in bucket.gauges.items():
+            gauge_snaps[name] = GaugeSnapshot(value=value, last_seen_ns=window_end_ns)
+            processed_count += 1
+            if processed_count % YIELD_EVERY == 0:
+                await asyncio.sleep(0)
+
         timer_snaps = {}
-        for name, histogram in self._timers.items():
+        for name, histogram in bucket.timers.items():
             if histogram.get_total_count() > 0:
                 timer_snaps[name] = TimerSnapshot(
                     count=histogram.get_total_count(),
@@ -252,34 +311,30 @@ class Aggregator:
                         "p999": float(histogram.get_value_at_percentile(99.9)),
                     },
                 )
+            processed_count += 1
+            if processed_count % YIELD_EVERY == 0:
+                await asyncio.sleep(0)
 
-        set_snaps = {
-            name: SetSnapshot(cardinality=len(values), sample_values=list(values)[:10])
-            for name, values in self._sets.items()
-        }
+        set_snaps = {}
+        for name, values in bucket.sets.items():
+            set_snaps[name] = SetSnapshot(cardinality=len(values), sample_values=list(values)[:10])
+            processed_count += 1
+            if processed_count % YIELD_EVERY == 0:
+                await asyncio.sleep(0)
 
         batch = AggregatedBatch(
             worker_id=self.worker_id,
-            window_start_ns=self._window_start_ns,
-            window_end_ns=now_ns,
+            window_start_ns=self._last_window_start_ns,
+            window_end_ns=window_end_ns,
             counters=counter_snaps,
             gauges=gauge_snaps,
             timers=timer_snaps,
             sets=set_snaps,
         )
 
-        # 重置状态 - Timer 需要调用 reset() 而非 clear()
-        self._counters.clear()
-        self._gauges.clear()
-        # HdrHistogram 重置
-        for histogram in self._timers.values():
-            histogram.reset()
-        self._timers.clear()
-        self._sets.clear()
-        # LRU 跟踪器也清空
-        self._lru_tracker.clear()
-        self._window_start_ns = now_ns
-
+        # 清理 flush bucket
+        self._flush_bucket = None
+        
         logger.debug(
             "[worker-%d] Flushed batch: counters=%d, gauges=%d, timers=%d, sets=%d",
             self.worker_id,
@@ -292,18 +347,19 @@ class Aggregator:
         return batch
 
     def stats(self) -> AggregatorStats:
-        """获取聚合器统计信息"""
+        """获取聚合器统计信息 (Active Bucket)"""
+        bucket = self._active_bucket
         series_count = (
-            len(self._counters)
-            + len(self._gauges)
-            + len(self._timers)
-            + len(self._sets)
+            len(bucket.counters)
+            + len(bucket.gauges)
+            + len(bucket.timers)
+            + len(bucket.sets)
         )
         return AggregatorStats(
-            metrics_received=self._metrics_received,
-            metrics_dropped=self._metrics_dropped,
+            metrics_received=bucket.metrics_received,
+            metrics_dropped=bucket.metrics_dropped,
             series_count=series_count,
-            evictions=self._evictions,
+            evictions=bucket.evictions,
         )
 
 
