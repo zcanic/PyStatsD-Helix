@@ -85,21 +85,20 @@
 
 基于 MVP (Stage P0) 的交付目标，制定以下紧急修复计划：
 
-### 阶段 1: 建立质量防线 (P0 - 立即执行)
-1.  **初始化测试框架**:
-    *   创建 `tests/` 目录。
-    *   配置 `pytest` 和 `conftest.py`。
-    *   移植/编写核心单元测试: `test_parser.py`, `test_aggregator.py`, `test_config.py`。
-2.  **性能基准建设**:
-    *   创建 `benchmarks/` 目录。
-    *   实现 `ingest_bench.py` (基于 `asyncio` 的 UDP 发包器)，验证当前实现的吞吐量上限。
+### 阶段 1: 核心性能与稳定性修复 (P0 - 立即执行)
+1.  **解决 Aggregator 同步 Flush 阻塞风险**:
+    *   重构 `aggregator.py`，实现真正的双缓冲机制。
+    *   将 `flush()` 拆分为 `rotate_buffer()` (同步，极快) 和 `process_buffer()` (异步，可分片执行)。
+    *   在 `process_buffer()` 中引入 `await asyncio.sleep(0)` 主动让出控制权，防止阻塞 UDP 接收。
+2.  **建立质量防线**:
+    *   创建 `tests/` 目录，配置 `pytest`。
+    *   编写 `test_aggregator.py` 验证双缓冲逻辑。
+    *   实现 `benchmarks/ingest_bench.py` 验证修复后的吞吐量与丢包率。
 
 ### 阶段 2: 补齐部署交付物 (P0 - 紧随其后)
 1.  **容器化**:
     *   编写 `Dockerfile` (基于 Python 3.12 Slim, 多阶段构建)。
     *   编写 `docker-compose.yaml` (包含 PyStatsD + Graphite + Grafana 演示环境)。
-2.  **本地运行文档**:
-    *   更新 `README.md`，增加 Docker 启动指引。
 
 ### 阶段 3: 完善扩展性 (P1 - MVP 后)
 1.  实现 `backends/devkit.py`。
@@ -108,4 +107,4 @@
 ---
 
 **建议立即执行命令**:
-我将开始执行阶段 1，首先创建测试目录结构并添加基础测试配置。
+我将开始执行阶段 1，首先重构 `aggregator.py` 以解决同步 Flush 阻塞问题，随后建立测试体系进行验证。
