@@ -87,13 +87,13 @@
 
 ### 阶段 1: 核心性能与稳定性修复 (P0 - 立即执行)
 1.  **解决 Aggregator 同步 Flush 阻塞风险**:
-    *   重构 `aggregator.py`，实现真正的双缓冲机制。
-    *   将 `flush()` 拆分为 `rotate_buffer()` (同步，极快) 和 `process_buffer()` (异步，可分片执行)。
-    *   在 `process_buffer()` 中引入 `await asyncio.sleep(0)` 主动让出控制权，防止阻塞 UDP 接收。
+    *   ✅ 重构 `aggregator.py`，实现真正的双缓冲机制。
+    *   ✅ 将 `flush()` 拆分为 `rotate_buffer()` (同步，极快) 和 `process_buffer()` (异步，可分片执行)。
+    *   ✅ 在 `process_buffer()` 中引入 `await asyncio.sleep(0)` 主动让出控制权，防止阻塞 UDP 接收。
 2.  **建立质量防线**:
-    *   创建 `tests/` 目录，配置 `pytest`。
-    *   编写 `test_aggregator.py` 验证双缓冲逻辑。
-    *   实现 `benchmarks/ingest_bench.py` 验证修复后的吞吐量与丢包率。
+    *   ✅ 创建 `tests/` 目录，配置 `pytest`。
+    *   ✅ 编写 `test_aggregator.py` 验证双缓冲逻辑。
+    *   ✅ 实现 `benchmarks/ingest_bench.py` 验证修复后的吞吐量与丢包率。
 
 ### 阶段 2: 补齐部署交付物 (P0 - 紧随其后)
 1.  **容器化**:
