@@ -96,9 +96,20 @@
     *   ✅ 实现 `benchmarks/ingest_bench.py` 验证修复后的吞吐量与丢包率。
 
 ### 阶段 2: 补齐部署交付物 (P0 - 紧随其后)
-1.  **容器化**:
-    *   编写 `Dockerfile` (基于 Python 3.12 Slim, 多阶段构建)。
-    *   编写 `docker-compose.yaml` (包含 PyStatsD + Graphite + Grafana 演示环境)。
+1.  **容器化构建**:
+    *   编写 `Dockerfile`:
+        *   使用 `python:3.12-slim` 作为基础镜像。
+        *   多阶段构建：Builder 阶段安装编译依赖 (gcc, rust/cargo for orjson/uvloop)，Runner 阶段保持精简。
+        *   非 root 用户运行 (`pystatsd`)。
+        *   预装 `curl` 用于健康检查。
+    *   编写 `.dockerignore` 排除无关文件。
+2.  **编排演示**:
+    *   编写 `docker-compose.yaml`:
+        *   服务: `pystatsd` (主服务), `graphite` (后端), `grafana` (可视化)。
+        *   网络: 独立 bridge 网络。
+        *   配置: 挂载 `config.toml`。
+3.  **文档更新**:
+    *   更新 `README.md`，添加 "Quick Start with Docker" 章节。
 
 ### 阶段 3: 完善扩展性 (P1 - MVP 后)
 1.  实现 `backends/devkit.py`。
@@ -107,4 +118,4 @@
 ---
 
 **建议立即执行命令**:
-我将开始执行阶段 1，首先重构 `aggregator.py` 以解决同步 Flush 阻塞问题，随后建立测试体系进行验证。
+我将开始执行阶段 2，首先编写 `Dockerfile` 和 `.dockerignore`。
