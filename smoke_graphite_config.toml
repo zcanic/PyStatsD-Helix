@@ -1,0 +1,14 @@
+[server]
+host = "127.0.0.1"
+port = 8126
+num_workers = 1
+flush_interval = 2.0
+log_level = "DEBUG"
+active_backends = ["graphite"]
+
+[backend_configs.graphite]
+host = "127.0.0.1"
+port = 2003
+prefix = "smoke"
+connect_timeout = 2.0
+write_timeout = 2.0

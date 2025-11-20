@@ -1,0 +1,38 @@
+# PyStatsD-Helix 示例配置
+
+[server]
+host = "0.0.0.0"
+port = 8125
+num_workers = 4  # 0 = 自动检测 CPU 核心数
+flush_interval = 10.0  # 秒
+log_level = "INFO"
+active_backends = ["logger"]  # 可选: ["logger", "graphite"]
+
+# Aggregation 配置
+max_series = 100000  # 每 worker 最大时间序列数
+max_packet_size = 65535
+
+# Timer Histogram 配置 (min_ms, max_ms, significant_figures)
+timer_histogram_config = [1, 3600000, 3]
+
+[backend_configs.logger]
+level = "INFO"
+mode = "ndjson"  # 或 "pretty"
+sample_percent = 100.0  # 采样百分比 (100 = 全部输出)
+destination = "stdout"  # 或 "stderr", "file"
+# file_path = "/var/log/pystatsd/metrics.log"  # destination="file" 时需要
+max_bytes = 10485760  # 10MB
+backup_count = 5
+
+# [backend_configs.graphite]
+# host = "graphite.example.com"
+# port = 2003
+# prefix = "statsd"
+# tag_format = "graphite"  # 或 "datadog"
+# enable_tls = false
+# connect_timeout = 5.0
+# write_timeout = 5.0
+# batch_size = 1000
+# batch_bytes = 65536
+# max_retries = 3
+# retry_backoff = 1.0

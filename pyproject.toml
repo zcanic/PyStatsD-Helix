@@ -1,0 +1,74 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pystatsd-helix"
+version = "0.1.0"
+description = "纯 Python、可线性扩展、具备标签支持的 StatsD 兼容服务器"
+readme = "README.md"
+requires-python = ">=3.12"
+license = {text = "MIT"}
+authors = [
+    {name = "PyStatsD-Helix Team"}
+]
+keywords = ["statsd", "metrics", "monitoring", "observability"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: System :: Monitoring",
+]
+
+dependencies = [
+    "pydantic>=2.0.0",
+    "pyyaml>=6.0",
+    "uvloop>=0.19.0",
+    "hdrhistogram>=0.10.0",
+    "orjson>=3.9.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "mypy>=1.5.0",
+    "ruff>=0.1.0",
+]
+tdigest = ["tdigest>=0.5.0"]
+
+[project.scripts]
+pystatsd = "pystatsd_helix.main:cli_entry"
+
+[project.entry-points."pystatsd.backends"]
+logger = "pystatsd_helix.backends.logger:LoggerBackend"
+graphite = "pystatsd_helix.backends.graphite:GraphiteBackend"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "DTZ", "T10", "DJ", "EM", "G", "PIE", "T20", "SIM", "TCH", "ARG", "PTH", "ERA", "PL", "RUF"]
+ignore = ["E501"]
+
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["F401"]
+"tests/*" = ["PLR2004", "S101"]

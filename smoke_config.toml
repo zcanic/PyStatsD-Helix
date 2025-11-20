@@ -1,0 +1,14 @@
+[server]
+host = "127.0.0.1"
+port = 8130
+num_workers = 1
+flush_interval = 2.0
+log_level = "DEBUG"
+active_backends = ["logger"]
+
+[backend_configs.logger]
+level = "INFO"
+mode = "ndjson"
+sample_percent = 100.0
+destination = "file"
+file_path = "smoke_metrics.log"
