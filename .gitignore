@@ -20,3 +20,5 @@ htmlcov/
 .mypy_cache/
 full_output*.txt
 smoke_metrics.log
+prometheus_multiproc/
+temp_metrics/

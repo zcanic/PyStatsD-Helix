@@ -7,7 +7,7 @@ import os
 import logging
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from typing import Optional
+from typing import Optional, Callable
 
 from .health import HealthCheck
 
@@ -39,7 +39,13 @@ class ObsRequestHandler(BaseHTTPRequestHandler):
             self.send_error(503, "Service Unavailable")
 
     def _handle_ready(self):
-        if HealthCheck.is_ready():
+        # Use the callback injected into the server if available
+        is_ready = True
+        if hasattr(self.server, 'readiness_check') and self.server.readiness_check:
+            is_ready = self.server.readiness_check()
+        
+        # Also check local static health logic
+        if is_ready and HealthCheck.is_ready():
             self.send_response(200)
             self.end_headers()
             self.wfile.write(b"OK")
@@ -72,15 +78,19 @@ class ObsRequestHandler(BaseHTTPRequestHandler):
         pass
 
 class ObsServer:
-    def __init__(self, host: str, port: int):
+    def __init__(self, host: str, port: int, readiness_check: Optional[Callable[[], bool]] = None):
         self.host = host
         self.port = port
+        self.readiness_check = readiness_check
         self.server: Optional[HTTPServer] = None
         self.thread: Optional[threading.Thread] = None
 
     def start(self):
         try:
             self.server = HTTPServer((self.host, self.port), ObsRequestHandler)
+            # Inject the callback into the server instance so the handler can access it
+            self.server.readiness_check = self.readiness_check
+            
             self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
             self.thread.start()
             logger.info(f"Observability server listening on {self.host}:{self.port}")

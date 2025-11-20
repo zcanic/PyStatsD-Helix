@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  pystatsd:
+    build: .
+    image: pystatsd-helix:latest
+    container_name: pystatsd
+    ports:
+      - "8125:8125/udp"
+      - "8126:8126"
+    volumes:
+      - ./docker_config.toml:/app/config.toml:ro
+    depends_on:
+      - graphite
+    networks:
+      - pystatsd-net
+    restart: unless-stopped
+
+  graphite:
+    image: graphiteapp/graphite-statsd
+    container_name: graphite
+    ports:
+      - "8080:80"   # Graphite Web Interface
+      - "2003:2003" # Carbon Line Receiver
+      - "2004:2004" # Carbon Pickle Receiver
+      - "7002:7002" # Carbon Cache Query
+    networks:
+      - pystatsd-net
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    networks:
+      - pystatsd-net
+    depends_on:
+      - graphite
+    restart: unless-stopped
+
+networks:
+  pystatsd-net:
+    driver: bridge

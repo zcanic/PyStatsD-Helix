@@ -34,8 +34,8 @@ def run_smoke_test():
         
         # Send multiple packets to ensure at least one gets through/flushed
         for i in range(5):
-            sock.sendto(f"test.counter:{i+1}|c".encode(), ("127.0.0.1", 8127))
-            sock.sendto(f"test.gauge:{i*10}|g".encode(), ("127.0.0.1", 8127))
+            sock.sendto(f"test.counter:{i+1}|c".encode(), ("127.0.0.1", 8130))
+            sock.sendto(f"test.gauge:{i*10}|g".encode(), ("127.0.0.1", 8130))
             time.sleep(0.1)
         
         print("Metrics sent. Waiting for flush (interval 2s)...")

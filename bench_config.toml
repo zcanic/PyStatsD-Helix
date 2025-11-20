@@ -1,0 +1,17 @@
+[server]
+host = "127.0.0.1"
+port = 8127
+num_workers = 1
+obs_host = "127.0.0.1"
+obs_port = 8128
+flush_interval = 10.0
+log_level = "DEBUG"
+active_backends = ["logger"]
+max_series = 100000
+timer_histogram_config = [1, 3600000, 3]
+
+[backend_configs.logger]
+level = "INFO"
+mode = "ndjson"
+sample_percent = 0.0
+destination = "stdout"

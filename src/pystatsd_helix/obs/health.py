@@ -21,9 +21,8 @@ class HealthCheck:
         """
         Readiness probe.
         Returns True if the application is ready to accept traffic.
-        Checks:
-        - Worker status
-        - Flush queue size (TODO)
-        - Circuit breaker status (TODO)
+        
+        Note: This is a static local check. The ObsServer injects a more comprehensive
+        check that verifies worker process liveness.
         """
         return True

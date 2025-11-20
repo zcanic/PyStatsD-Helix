@@ -72,6 +72,35 @@ prefix = "statsd"
 tag_format = "graphite"
 ```
 
+## Docker 部署
+
+本项目提供完整的 Docker 支持，包含 Graphite 和 Grafana 的演示环境。
+
+### 快速启动演示环境
+
+1. **构建并启动服务**:
+   ```bash
+   docker-compose up -d
+   ```
+
+2. **验证服务**:
+   - **PyStatsD**: 监听 UDP 8125 (Ingest) 和 TCP 8126 (Health/Metrics)
+   - **Graphite Web**: http://localhost:8080
+   - **Grafana**: http://localhost:3000 (默认账号 admin/admin)
+
+3. **发送测试数据**:
+   ```bash
+   # Linux/Mac
+   echo "test.counter:1|c" | nc -u -w1 127.0.0.1 8125
+   
+   # Windows (PowerShell)
+   $client = New-Object System.Net.Sockets.UdpClient
+   $client.Connect("127.0.0.1", 8125)
+   $bytes = [System.Text.Encoding]::ASCII.GetBytes("test.counter:1|c")
+   $client.Send($bytes, $bytes.Length)
+   $client.Close()
+   ```
+
 ## 项目结构
 
 ```

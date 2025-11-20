@@ -1,0 +1,18 @@
+# Docker Environment Configuration
+
+host = "0.0.0.0"
+port = 8125
+num_workers = 2
+flush_interval = 10.0
+log_level = "INFO"
+active_backends = ["graphite", "logger"]
+
+[backend_configs.graphite]
+host = "graphite"
+port = 2003
+prefix = "statsd"
+tag_format = "graphite"
+
+[backend_configs.logger]
+level = "INFO"
+destination = "stdout"

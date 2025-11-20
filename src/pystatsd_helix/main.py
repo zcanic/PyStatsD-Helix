@@ -53,7 +53,12 @@ class Supervisor:
     def start(self) -> None:
         """Start all worker processes."""
         # Start Observability Server
-        self.obs_server = ObsServer(self.config.obs_host, self.config.obs_port)
+        # Pass a lambda that checks if all workers are alive
+        self.obs_server = ObsServer(
+            self.config.obs_host, 
+            self.config.obs_port,
+            readiness_check=self.check_workers_health
+        )
         self.obs_server.start()
 
         num_workers = self.config.get_num_workers()
@@ -79,6 +84,21 @@ class Supervisor:
             p.start()
             self.processes.append(p)
             logger.info(f"Started worker {i + 1} (PID: {p.pid})")
+
+    def check_workers_health(self) -> bool:
+        """
+        Check if all worker processes are alive.
+        Returns False if any worker has died unexpectedly.
+        """
+        if not self.processes:
+            # If no processes started yet, we are not ready
+            return False
+            
+        for p in self.processes:
+            if not p.is_alive():
+                logger.error(f"Worker {p.worker_id} (PID: {p.pid}) is dead!")
+                return False
+        return True
 
     def stop(self, reason: str, timeout: float = SHUTDOWN_TIMEOUT) -> None:
         """Stop all workers gracefully."""
