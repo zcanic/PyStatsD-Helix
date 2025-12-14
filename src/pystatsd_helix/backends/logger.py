@@ -4,6 +4,8 @@ import asyncio
 import json
 import logging
 import sys
+import os
+import stat
 import time
 import random
 from typing import Any, TextIO, Optional, TYPE_CHECKING
@@ -53,18 +55,29 @@ class LoggerBackend(Backend):
         
         if config.destination in ("stdout", "stderr"):
             pipe = sys.stdout if config.destination == "stdout" else sys.stderr
+            
+            # Check if pipe is a regular file (redirected)
+            is_regular_file = False
+            try:
+                mode = os.fstat(pipe.fileno()).st_mode
+                if stat.S_ISREG(mode):
+                    is_regular_file = True
+            except Exception:
+                pass
+
             # Create async writer for stdout/stderr
             # Note: connect_write_pipe is not supported on all event loops (e.g. Windows SelectorEventLoop)
-            # uvloop supports it usually.
-            # For cross-platform safety in MVP, especially on Windows default loop, 
-            # we might need run_in_executor for blocking I/O if connect_write_pipe fails.
+            # uvloop supports it usually, but NOT for regular files (it might crash or fail).
             try:
+                if is_regular_file:
+                    raise ValueError("Cannot use connect_write_pipe on regular file")
+                    
                 transport, protocol = await loop.connect_write_pipe(
                     asyncio.streams.FlowControlMixin, pipe
                 )
                 self._writer = asyncio.StreamWriter(transport, protocol, None, loop)
             except Exception:
-                # Fallback for Windows/SelectorLoop
+                # Fallback for Windows/SelectorLoop or Regular Files
                 self._writer = None # Will use print/write in executor
                 
         elif config.destination == "file":

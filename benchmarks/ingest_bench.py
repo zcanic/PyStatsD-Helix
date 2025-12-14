@@ -10,10 +10,11 @@ from collections import Counter
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger("ingest_bench")
 
-async def send_packets(host, port, duration, rate, payload_size):
+async def send_packets(host, port, duration, rate, batch_size):
     """
     Send UDP packets at a target rate.
     """
+    batch_size = max(1, batch_size)
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     # Increase buffer size
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 4 * 1024 * 1024)
@@ -26,6 +27,7 @@ async def send_packets(host, port, duration, rate, payload_size):
     end_time = start_time + duration
     
     packets_sent = 0
+    metrics_sent = 0
     bytes_sent = 0
     
     # Pre-generate some payloads to avoid CPU overhead during loop
@@ -58,10 +60,19 @@ async def send_packets(host, port, duration, rate, payload_size):
             tokens = rate
             
         while tokens >= 1.0:
-            payload = payloads[packets_sent % payload_count]
+            if batch_size == 1:
+                payload = payloads[packets_sent % payload_count]
+            else:
+                metrics_batch = []
+                base_idx = packets_sent % payload_count
+                for offset in range(batch_size):
+                    metrics_batch.append(payloads[(base_idx + offset) % payload_count])
+                payload = b"\n".join(metrics_batch)
+
             try:
                 sock.sendto(payload, target_addr)
                 packets_sent += 1
+                metrics_sent += batch_size
                 bytes_sent += len(payload)
                 tokens -= 1.0
             except BlockingIOError:
@@ -77,8 +88,10 @@ async def send_packets(host, port, duration, rate, payload_size):
         
     total_duration = time.monotonic() - start_time
     logger.info(f"Benchmark finished.")
-    logger.info(f"Sent: {packets_sent} packets, {bytes_sent} bytes in {total_duration:.2f}s")
+    logger.info(f"Sent: {packets_sent} packets, {metrics_sent} metrics, {bytes_sent} bytes in {total_duration:.2f}s")
     logger.info(f"Actual Rate: {packets_sent / total_duration:.2f} pkt/s")
+    logger.info(f"PACKETS_SENT={packets_sent}")
+    logger.info(f"METRICS_SENT={metrics_sent}")
     
     return packets_sent
 
@@ -88,10 +101,11 @@ async def main():
     parser.add_argument("--port", type=int, default=8125, help="Target port")
     parser.add_argument("--duration", type=int, default=10, help="Duration in seconds")
     parser.add_argument("--rate", type=int, default=40000, help="Target packet rate (pkt/s)")
+    parser.add_argument("--batch-size", type=int, default=1, help="Metrics per packet")
     
     args = parser.parse_args()
     
-    await send_packets(args.host, args.port, args.duration, args.rate, 0)
+    await send_packets(args.host, args.port, args.duration, args.rate, args.batch_size)
 
 if __name__ == "__main__":
     try:

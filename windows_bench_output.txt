@@ -1,0 +1,66 @@
+==================================================
+PyStatsD-Helix Windows Benchmark
+==================================================
+Platform: win32
+Event Loop: asyncio (Windows)
+
+=== Testing 10,000 pkt/s ===
+  Server ready, initial count: 0
+  Sent: 99,995
+  Received: 99,995, Loss: 0.00%
+  Waiting for port release...
+
+=== Testing 30,000 pkt/s ===
+  Server ready, initial count: 0
+  Sent: 299,992
+  Received: 299,992, Loss: 0.00%
+  Waiting for port release...
+
+=== Testing 50,000 pkt/s ===
+  Server ready, initial count: 0
+  Sent: 499,993
+  Received: 499,993, Loss: 0.00%
+  Waiting for port release...
+
+=== Testing 70,000 pkt/s ===
+  Server ready, initial count: 0
+  Sent: 699,993
+  Received: 699,993, Loss: 0.00%
+  Waiting for port release...
+
+=== Testing 100,000 pkt/s ===
+  Server ready, initial count: 0
+  Sent: 999,991
+  Received: 999,991, Loss: 0.00%
+  Waiting for port release...
+
+=== Testing 120,000 pkt/s ===
+  Server ready, initial count: 0
+  Sent: 1,199,977
+  Received: 1,199,977, Loss: 0.00%
+  Waiting for port release...
+
+=== Testing 150,000 pkt/s ===
+  Server ready, initial count: 0
+  Sent: 1,499,977
+  Received: 1,390,715, Loss: 7.28%
+  Waiting for port release...
+
+============================================================
+SUMMARY
+============================================================
+        Rate |         Sent |     Received |     Loss %
+------------------------------------------------------------
+      10,000 |       99,995 |       99,995 |       0.00%
+      30,000 |      299,992 |      299,992 |       0.00%
+      50,000 |      499,993 |      499,993 |       0.00%
+      70,000 |      699,993 |      699,993 |       0.00%
+     100,000 |      999,991 |      999,991 |       0.00%
+     120,000 |    1,199,977 |    1,199,977 |       0.00%
+     150,000 |    1,499,977 |    1,390,715 |       7.28%
+
+Results saved to windows_loss_curve.csv
+
+===JSON_START===
+[{"rate": 10000, "sent": 99995, "received": 99995, "loss_pct": 0.0}, {"rate": 30000, "sent": 299992, "received": 299992, "loss_pct": 0.0}, {"rate": 50000, "sent": 499993, "received": 499993, "loss_pct": 0.0}, {"rate": 70000, "sent": 699993, "received": 699993, "loss_pct": 0.0}, {"rate": 100000, "sent": 999991, "received": 999991, "loss_pct": 0.0}, {"rate": 120000, "sent": 1199977, "received": 1199977, "loss_pct": 0.0}, {"rate": 150000, "sent": 1499977, "received": 1390715, "loss_pct": 7.284245025090384}]
+===JSON_END===

@@ -1,0 +1,42 @@
+# Dockerfile for running benchmarks inside container
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Install build dependencies for uvloop and hdrhistogram
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy project files
+COPY pyproject.toml .
+COPY src/ src/
+COPY README.md .
+COPY benchmarks/ benchmarks/
+
+# Install the package
+RUN pip install --no-cache-dir -e .
+
+# Create benchmark config
+RUN echo '[server]\n\
+host = "0.0.0.0"\n\
+port = 8125\n\
+num_workers = 1\n\
+flush_interval = 2.0\n\
+log_level = "INFO"\n\
+active_backends = ["logger"]\n\
+max_series = 100000\n\
+timer_histogram_config = [1, 3600000, 3]\n\
+socket_buffer_size = 16777216\n\
+obs_host = "0.0.0.0"\n\
+obs_port = 9102\n\
+\n\
+[backend_configs.logger]\n\
+level = "INFO"\n\
+mode = "ndjson"\n\
+sample_percent = 0.0\n\
+destination = "stdout"\n' > /app/bench_config.toml
+
+# Default command: run benchmark suite
+CMD ["python", "benchmarks/linux_bench_suite.py"]

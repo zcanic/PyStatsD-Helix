@@ -1,0 +1,2 @@
+batch_size,rate,sent_metrics,received,loss_rate
+1,10000,49876,49876,0.0

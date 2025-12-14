@@ -125,6 +125,9 @@ class Aggregator:
         self._flush_bucket: MetricBucket | None = None
         
         self._window_start_ns = time.monotonic_ns()
+        
+        # Cumulative counter for cross-process visibility (persists across buffer rotations)
+        self.total_metrics_received: int = 0
 
         # Metrics
         self.metrics = MetricRegistry()
@@ -143,51 +146,76 @@ class Aggregator:
             "Current number of active time series",
             labelnames=("worker_id",)
         )
+        
+        # Local counters for batching
+        self._local_received = defaultdict(int)
+        self._local_dropped = defaultdict(int)
+        self._batch_counter = 0
+        self._batch_mask = 1023
 
     def receive(self, metric: Metric) -> None:
         """
         接收并聚合单个 Metric 到当前活跃桶
         """
-        self.received_total.labels(type=metric.type.value).inc()
+        # Hot path optimization: batch metrics updates
+        self._local_received[metric.type.value] += 1
+        self._batch_counter += 1
+        
+        if (self._batch_counter & self._batch_mask) == 0:
+            for mtype, count in self._local_received.items():
+                self.received_total.labels(type=mtype).inc(count)
+            self._local_received.clear()
+            
+            for reason, count in self._local_dropped.items():
+                self.dropped_total.labels(reason=reason).inc(count)
+            self._local_dropped.clear()
+            
+            self._batch_counter = 0
+
         bucket = self._active_bucket
         bucket.metrics_received += 1
+        self.total_metrics_received += 1  # Cumulative counter for cross-process visibility
 
         # Cardinality Guard with LRU eviction
         metric_key = metric.name
-        total_series = (
-            len(bucket.counters)
-            + len(bucket.gauges)
-            + len(bucket.timers)
-            + len(bucket.sets)
-        )
-
-        if metric_key not in bucket.lru_tracker and total_series >= self.max_series:
-            # 达到上限，驱逐最老的 series
-            if bucket.lru_tracker:
-                evict_key, _ = bucket.lru_tracker.popitem(last=False)
-                # 从对应存储中删除
-                bucket.counters.pop(evict_key, None)
-                bucket.gauges.pop(evict_key, None)
-                bucket.timers.pop(evict_key, None)
-                bucket.sets.pop(evict_key, None)
-                bucket.evictions += 1
-                
-                if bucket.evictions % 100 == 0:
-                    logger.warning(
-                        "[worker-%d] Evicted %d series due to cardinality limit",
-                        self.worker_id,
-                        bucket.evictions,
-                    )
-            else:
-                # 无法驱逐，丢弃
-                bucket.metrics_dropped += 1
-                self.dropped_total.labels(reason="cardinality_limit").inc()
-                return
-
-        # 更新 LRU
+        
+        # OPTIMIZATION: Check LRU first to avoid calculating total_series
         if metric_key in bucket.lru_tracker:
             bucket.lru_tracker.move_to_end(metric_key, last=True)
-        bucket.lru_tracker[metric_key] = bucket.metrics_received
+        else:
+            # New series, check limits
+            total_series = (
+                len(bucket.counters)
+                + len(bucket.gauges)
+                + len(bucket.timers)
+                + len(bucket.sets)
+            )
+
+            if total_series >= self.max_series:
+                # 达到上限，驱逐最老的 series
+                if bucket.lru_tracker:
+                    evict_key, _ = bucket.lru_tracker.popitem(last=False)
+                    # 从对应存储中删除
+                    bucket.counters.pop(evict_key, None)
+                    bucket.gauges.pop(evict_key, None)
+                    bucket.timers.pop(evict_key, None)
+                    bucket.sets.pop(evict_key, None)
+                    bucket.evictions += 1
+                    
+                    if bucket.evictions % 100 == 0:
+                        logger.warning(
+                            "[worker-%d] Evicted %d series due to cardinality limit",
+                            self.worker_id,
+                            bucket.evictions,
+                        )
+                else:
+                    # 无法驱逐，丢弃
+                    bucket.metrics_dropped += 1
+                    self._local_dropped["cardinality_limit"] += 1
+                    return
+            
+            # Add to LRU
+            bucket.lru_tracker[metric_key] = bucket.metrics_received
 
         try:
             if metric.type == MetricType.COUNTER:
@@ -345,6 +373,21 @@ class Aggregator:
         )
 
         return batch
+
+    def flush_pending_metrics(self) -> None:
+        """Flush any pending batched metrics to Prometheus.
+        
+        Call this before shutdown or when querying metrics to ensure all data is visible.
+        """
+        if self._local_received:
+            for mtype, count in self._local_received.items():
+                self.received_total.labels(type=mtype).inc(count)
+            self._local_received.clear()
+            
+        if self._local_dropped:
+            for reason, count in self._local_dropped.items():
+                self.dropped_total.labels(reason=reason).inc(count)
+            self._local_dropped.clear()
 
     def stats(self) -> AggregatorStats:
         """获取聚合器统计信息 (Active Bucket)"""

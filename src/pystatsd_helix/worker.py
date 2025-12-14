@@ -29,10 +29,11 @@ class Worker:
     Independent Worker process.
     Runs its own event loop, aggregator, and backends.
     """
-    def __init__(self, worker_id: int, config: ServerConfig, heartbeat_shared_value: Any = None):
+    def __init__(self, worker_id: int, config: ServerConfig, heartbeat_shared_value: Any = None, metrics_received_shared_value: Any = None):
         self.worker_id = worker_id
         self.config = config
         self.heartbeat_shared_value = heartbeat_shared_value
+        self.metrics_received_shared_value = metrics_received_shared_value
         self.logger = logging.getLogger(f"worker.{worker_id}")
         self._shutdown_event = asyncio.Event()
         
@@ -139,6 +140,7 @@ class Worker:
             
         # Final flush
         self.logger.info("Performing final flush...")
+        self.aggregator.flush_pending_metrics()  # Ensure all batched metrics are flushed to Prometheus
         self.aggregator.rotate_buffer()
         final_batch = await self.aggregator.process_buffer(time.monotonic_ns(), time.time())
         await self.dispatcher.submit(final_batch)
@@ -155,14 +157,16 @@ class Worker:
         Periodically flush metrics to backends.
         """
         while not self._shutdown_event.is_set():
-            # Update shared heartbeat timestamp
-            if self.heartbeat_shared_value:
-                self.heartbeat_shared_value.value = time.time()
-
             # Jitter
             interval = self.config.flush_interval * random.uniform(0.95, 1.05)
             try:
                 await asyncio.sleep(interval)
+                
+                # Update shared values AFTER sleep (so they're visible when metrics are queried)
+                if self.heartbeat_shared_value:
+                    self.heartbeat_shared_value.value = time.time()
+                if self.metrics_received_shared_value:
+                    self.metrics_received_shared_value.value = self.aggregator.total_metrics_received
                 
                 # Heartbeat
                 self.heartbeat.labels(worker_id=str(self.worker_id)).inc()
@@ -182,13 +186,17 @@ class Worker:
                 else:
                     self.logger.error("Dispatcher not initialized, dropping batch")
                 
+                # Update shared memory again after flush (in case more metrics arrived during flush)
+                if self.metrics_received_shared_value:
+                    self.metrics_received_shared_value.value = self.aggregator.total_metrics_received
+                
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 self.logger.error(f"Error in flush loop: {e}", exc_info=True)
 
 
-def run_worker_process(config: ServerConfig, worker_id: int, heartbeat_shared_value: Any = None) -> None:
+def run_worker_process(config: ServerConfig, worker_id: int, heartbeat_shared_value: Any = None, metrics_received_shared_value: Any = None) -> None:
     """
     Entry point called by multiprocessing.Process.
     """
@@ -207,7 +215,7 @@ def run_worker_process(config: ServerConfig, worker_id: int, heartbeat_shared_va
         logging.warning("uvloop not found! Falling back to standard asyncio loop. Performance will be degraded.")
 
     # 3. Run Worker
-    worker = Worker(worker_id, config, heartbeat_shared_value)
+    worker = Worker(worker_id, config, heartbeat_shared_value, metrics_received_shared_value)
     try:
         asyncio.run(worker.run())
     except KeyboardInterrupt:

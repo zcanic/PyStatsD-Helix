@@ -7,7 +7,7 @@ import os
 import logging
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from typing import Optional, Callable
+from typing import Optional, Callable, Dict, Any
 
 from .health import HealthCheck
 
@@ -53,22 +53,34 @@ class ObsRequestHandler(BaseHTTPRequestHandler):
             self.send_error(503, "Service Unavailable")
 
     def _handle_metrics(self):
-        if not PROMETHEUS_AVAILABLE:
-            self.send_error(501, "Prometheus client not installed")
-            return
-
         try:
-            if 'PROMETHEUS_MULTIPROC_DIR' in os.environ:
-                registry = CollectorRegistry()
-                multiprocess.MultiProcessCollector(registry)
-            else:
-                registry = REGISTRY
-
-            data = generate_latest(registry)
+            output_lines = []
+            
+            # 1. Add custom metrics from callback (shared memory counters)
+            if hasattr(self.server, 'metrics_callback') and self.server.metrics_callback:
+                custom_metrics = self.server.metrics_callback()
+                if custom_metrics:
+                    for name, value in custom_metrics.items():
+                        # Format as Prometheus text format
+                        output_lines.append(f"# HELP {name} Custom metric from shared memory")
+                        output_lines.append(f"# TYPE {name} gauge")
+                        output_lines.append(f"{name} {value}")
+            
+            # 2. Add Prometheus metrics if available
+            if PROMETHEUS_AVAILABLE:
+                if 'PROMETHEUS_MULTIPROC_DIR' in os.environ:
+                    registry = CollectorRegistry()
+                    multiprocess.MultiProcessCollector(registry)
+                else:
+                    registry = REGISTRY
+                prometheus_data = generate_latest(registry).decode('utf-8')
+                output_lines.append(prometheus_data)
+            
+            response = "\n".join(output_lines).encode('utf-8')
             self.send_response(200)
-            self.send_header("Content-Type", CONTENT_TYPE_LATEST)
+            self.send_header("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
             self.end_headers()
-            self.wfile.write(data)
+            self.wfile.write(response)
         except Exception as e:
             logger.error(f"Error generating metrics: {e}")
             self.send_error(500, "Internal Server Error")
@@ -78,18 +90,21 @@ class ObsRequestHandler(BaseHTTPRequestHandler):
         pass
 
 class ObsServer:
-    def __init__(self, host: str, port: int, readiness_check: Optional[Callable[[], bool]] = None):
+    def __init__(self, host: str, port: int, readiness_check: Optional[Callable[[], bool]] = None, 
+                 metrics_callback: Optional[Callable[[], Dict[str, Any]]] = None):
         self.host = host
         self.port = port
         self.readiness_check = readiness_check
+        self.metrics_callback = metrics_callback
         self.server: Optional[HTTPServer] = None
         self.thread: Optional[threading.Thread] = None
 
     def start(self):
         try:
             self.server = HTTPServer((self.host, self.port), ObsRequestHandler)
-            # Inject the callback into the server instance so the handler can access it
+            # Inject the callbacks into the server instance so the handler can access them
             self.server.readiness_check = self.readiness_check
+            self.server.metrics_callback = self.metrics_callback
             
             self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
             self.thread.start()
@@ -101,3 +116,4 @@ class ObsServer:
         if self.server:
             self.server.shutdown()
             self.server.server_close()
+

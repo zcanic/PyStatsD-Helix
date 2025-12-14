@@ -12,7 +12,9 @@ PyStatsD-Helix 旨在提供一个现代化的 StatsD 替代方案，利用 Pytho
 
 - **MVP 已就绪**: 核心功能开发完成，通过单元测试与基准测试。
 - **Windows 兼容**: 已验证在 Windows 环境下的运行能力（自动降级适配）。
-- **性能达标**: 单节点（单 Worker）在 Windows 上实测 **~47k UDP pkt/s** (Packet Loss < 5%)。
+- **性能达标**: 
+  - **Windows**: 单 Worker 实测 **120k pkt/s @ 0% 丢包**，150k pkt/s @ 7.3% 丢包
+  - **Linux (Docker + uvloop)**: 单 Worker 实测 **80k pkt/s @ 0% 丢包**，200k pkt/s @ 7.5% 丢包
 
 详细报告请参阅：
 - [📘 蓝图一致性报告 (Blueprint Consistency Report)](BLUEPRINT_CONSISTENCY_REPORT.md)

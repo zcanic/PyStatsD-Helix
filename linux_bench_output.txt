@@ -1,0 +1,58 @@
+==================================================
+PyStatsD-Helix Linux Benchmark
+==================================================
+uvloop: Available
+
+=== Testing 10,000 pkt/s ===
+  Server ready, initial count: 0
+  Sent: 99,999
+  Received: 99,999, Loss: 0.00%
+
+=== Testing 30,000 pkt/s ===
+  Server ready, initial count: 0
+  Sent: 299,995
+  Received: 299,995, Loss: 0.00%
+
+=== Testing 50,000 pkt/s ===
+  Server ready, initial count: 0
+  Sent: 499,998
+  Received: 499,998, Loss: 0.00%
+
+=== Testing 80,000 pkt/s ===
+  Server ready, initial count: 0
+  Sent: 799,987
+  Received: 799,921, Loss: 0.01%
+
+=== Testing 100,000 pkt/s ===
+  Server ready, initial count: 0
+  Sent: 999,997
+  Received: 998,137, Loss: 0.19%
+
+=== Testing 150,000 pkt/s ===
+  Server ready, initial count: 0
+  Sent: 1,499,978
+  Received: 1,417,732, Loss: 5.48%
+
+=== Testing 200,000 pkt/s ===
+  Server ready, initial count: 0
+  Sent: 1,999,980
+  Received: 1,850,779, Loss: 7.46%
+
+============================================================
+SUMMARY
+============================================================
+        Rate |         Sent |     Received |     Loss %
+------------------------------------------------------------
+      10,000 |       99,999 |       99,999 |       0.00%
+      30,000 |      299,995 |      299,995 |       0.00%
+      50,000 |      499,998 |      499,998 |       0.00%
+      80,000 |      799,987 |      799,921 |       0.01%
+     100,000 |      999,997 |      998,137 |       0.19%
+     150,000 |    1,499,978 |    1,417,732 |       5.48%
+     200,000 |    1,999,980 |    1,850,779 |       7.46%
+
+Results saved!
+
+===JSON_START===
+[{"rate": 10000, "sent": 99999, "received": 99999, "loss_pct": 0.0}, {"rate": 30000, "sent": 299995, "received": 299995, "loss_pct": 0.0}, {"rate": 50000, "sent": 499998, "received": 499998, "loss_pct": 0.0}, {"rate": 80000, "sent": 799987, "received": 799921, "loss_pct": 0.00825013406467855}, {"rate": 100000, "sent": 999997, "received": 998137, "loss_pct": 0.186000558001674}, {"rate": 150000, "sent": 1499978, "received": 1417732, "loss_pct": 5.483147086157264}, {"rate": 200000, "sent": 1999980, "received": 1850779, "loss_pct": 7.4601246012460125}]
+===JSON_END===

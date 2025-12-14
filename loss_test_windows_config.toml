@@ -1,0 +1,19 @@
+[server]
+host = "127.0.0.1"
+port = 8130
+num_workers = 1
+obs_host = "127.0.0.1"
+obs_port = 8131
+flush_interval = 2.0
+log_level = "INFO"
+active_backends = ["logger"]
+max_series = 100000
+timer_histogram_config = [1, 3600000, 3]
+socket_buffer_size = 16777216
+
+[backend_configs.logger]
+level = "INFO"
+mode = "ndjson"
+sample_percent = 100.0
+destination = "file"
+file_path = "bench_output.ndjson"

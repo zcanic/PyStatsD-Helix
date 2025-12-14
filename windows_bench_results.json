@@ -1,0 +1,44 @@
+[
+  {
+    "rate": 10000,
+    "sent": 99995,
+    "received": 99995,
+    "loss_pct": 0.0
+  },
+  {
+    "rate": 30000,
+    "sent": 299992,
+    "received": 299992,
+    "loss_pct": 0.0
+  },
+  {
+    "rate": 50000,
+    "sent": 499993,
+    "received": 499993,
+    "loss_pct": 0.0
+  },
+  {
+    "rate": 70000,
+    "sent": 699993,
+    "received": 699993,
+    "loss_pct": 0.0
+  },
+  {
+    "rate": 100000,
+    "sent": 999991,
+    "received": 999991,
+    "loss_pct": 0.0
+  },
+  {
+    "rate": 120000,
+    "sent": 1199977,
+    "received": 1199977,
+    "loss_pct": 0.0
+  },
+  {
+    "rate": 150000,
+    "sent": 1499977,
+    "received": 1390715,
+    "loss_pct": 7.284245025090384
+  }
+]

@@ -33,12 +33,14 @@ class WorkerProcess(mp.Process):
         self.config = config
         # Shared memory value for heartbeat timestamp (double)
         self.heartbeat_ts = mp.Value('d', time.time())
+        # Shared memory value for metrics received count (unsigned long long)
+        self.metrics_received = mp.Value('Q', 0)  # 'Q' = unsigned long long (64-bit)
         # Ensure daemon is False so signals propagate correctly and we can join them
         self.daemon = False
 
     def run(self) -> None:
         # This runs in the child process
-        run_worker_process(self.config, self.worker_id, self.heartbeat_ts)
+        run_worker_process(self.config, self.worker_id, self.heartbeat_ts, self.metrics_received)
 
 
 class Supervisor:
@@ -52,17 +54,15 @@ class Supervisor:
         self._stopping = False
         self.obs_server: Optional[ObsServer] = None
 
+    def get_worker_metrics(self) -> dict:
+        """Collect metrics from all workers via shared memory."""
+        total_received = sum(p.metrics_received.value for p in self.processes)
+        return {
+            "pystatsd_aggregator_received_total": total_received,
+        }
+
     def start(self) -> None:
         """Start all worker processes."""
-        # Start Observability Server
-        # Pass a lambda that checks if all workers are alive
-        self.obs_server = ObsServer(
-            self.config.obs_host, 
-            self.config.obs_port,
-            readiness_check=self.check_workers_health
-        )
-        self.obs_server.start()
-
         num_workers = self.config.get_num_workers()
         if num_workers == 0:
             logger.critical("Number of workers is 0. Exiting.")
@@ -86,6 +86,15 @@ class Supervisor:
             p.start()
             self.processes.append(p)
             logger.info(f"Started worker {i + 1} (PID: {p.pid})")
+
+        # Start Observability Server AFTER workers so get_worker_metrics works
+        self.obs_server = ObsServer(
+            self.config.obs_host, 
+            self.config.obs_port,
+            readiness_check=self.check_workers_health,
+            metrics_callback=self.get_worker_metrics
+        )
+        self.obs_server.start()
 
     def check_workers_health(self) -> bool:
         """
@@ -111,7 +120,6 @@ class Supervisor:
                 logger.error(f"Worker {p.worker_id} (PID: {p.pid}) is stuck! Last heartbeat: {now - last_beat:.1f}s ago")
                 return False
                 
-        return True
         return True
 
     def stop(self, reason: str, timeout: float = SHUTDOWN_TIMEOUT) -> None:

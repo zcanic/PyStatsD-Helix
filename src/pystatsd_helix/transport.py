@@ -36,6 +36,12 @@ class StatsDProtocol(asyncio.DatagramProtocol):
             "Total number of packet processing errors", 
             labelnames=("type",)
         )
+        
+        # Local counters for batching updates to Prometheus
+        self._local_packets = 0
+        self._local_bytes = 0
+        self._local_errors = 0
+        self._batch_mask = 1023 # Update every 1024 packets
 
     def connection_made(self, transport: asyncio.BaseTransport):
         self.transport = transport # type: ignore
@@ -44,8 +50,16 @@ class StatsDProtocol(asyncio.DatagramProtocol):
         """
         Process received datagram.
         """
-        self.packets_total.labels(protocol="udp").inc()
-        self.bytes_total.labels(protocol="udp").inc(len(data))
+        # Hot path optimization: use local counters
+        self._local_packets += 1
+        self._local_bytes += len(data)
+        
+        # Update prometheus less frequently
+        if (self._local_packets & self._batch_mask) == 0:
+            self.packets_total.labels(protocol="udp").inc(self._local_packets)
+            self.bytes_total.labels(protocol="udp").inc(self._local_bytes)
+            self._local_packets = 0
+            self._local_bytes = 0
 
         # 1. Parse
         # Note: parse returns a result with metrics and error count
@@ -58,10 +72,14 @@ class StatsDProtocol(asyncio.DatagramProtocol):
             
         # 3. Log errors if any (rate limited ideally, but simple for MVP)
         if result.errors > 0:
-            self.errors_total.labels(type="parse_error").inc(result.errors)
+            self._local_errors += result.errors
+            if self._local_errors > 100:
+                 self.errors_total.labels(type="parse_error").inc(self._local_errors)
+                 self._local_errors = 0
+            
             # In a real high-perf system, we'd increment an internal counter
             # rather than logging every time to avoid log spam.
-            self.logger.debug(f"Ignored {result.errors} malformed metrics from {addr}")
+            # self.logger.debug(f"Ignored {result.errors} malformed metrics from {addr}")
 
     def error_received(self, exc: Exception):
         self.logger.warning(f"UDP transport error: {exc}")

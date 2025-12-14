@@ -21,10 +21,11 @@ coverage.xml
 .pytest_cache
 .hypothes
 debug_*.py
-smoke_*.py
-test_*.py
+# smoke_*.py
+# test_*.py
 *.md
 !README.md
 current_blueprint/
-benchmarks/
-tests/
+# benchmarks/
+# tests/
+
