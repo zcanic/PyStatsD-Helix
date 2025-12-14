@@ -1,0 +1,34 @@
+[
+  {
+    "workers": 1,
+    "target_rate": 50000,
+    "actual_rate": 49999.02151719649,
+    "sent": 499999,
+    "received": 499999,
+    "loss_pct": 0.0
+  },
+  {
+    "workers": 1,
+    "target_rate": 100000,
+    "actual_rate": 99997.86902826917,
+    "sent": 999992,
+    "received": 999992,
+    "loss_pct": 0.0
+  },
+  {
+    "workers": 1,
+    "target_rate": 150000,
+    "actual_rate": 149994.52666698163,
+    "sent": 1499991,
+    "received": 1350599,
+    "loss_pct": 9.95952642382521
+  },
+  {
+    "workers": 1,
+    "target_rate": 200000,
+    "actual_rate": 164160.12241696776,
+    "sent": 1642404,
+    "received": 1187010,
+    "loss_pct": 27.72728269049515
+  }
+]

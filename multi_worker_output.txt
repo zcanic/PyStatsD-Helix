@@ -1,0 +1,62 @@
+======================================================================
+PyStatsD-Helix Multi-Worker Benchmark
+======================================================================
+Platform: win32
+Workers to test: [1, 2, 4]
+Rates to test: ['50k', '100k', '150k', '200k']
+Duration per test: 10s
+
+======================================================================
+Testing with 1 Worker(s)
+======================================================================
+
+  1W @ 50,000 pkt/s: sent=499,999, recv=499,999, loss=0.00% [OK]
+
+  1W @ 100,000 pkt/s: sent=999,992, recv=999,992, loss=0.00% [OK]
+
+  1W @ 150,000 pkt/s: sent=1,499,991, recv=1,350,599, loss=9.96% [LOSS]
+
+  1W @ 200,000 pkt/s: sent=1,642,404, recv=1,187,010, loss=27.73% [LOSS]
+
+======================================================================
+Testing with 2 Worker(s)
+======================================================================
+
+  2W @ 50,000 pkt/s: FAILED (server crashed)
+
+  2W @ 100,000 pkt/s: FAILED (server crashed)
+
+  2W @ 150,000 pkt/s: FAILED (server crashed)
+
+  2W @ 200,000 pkt/s: FAILED (server crashed)
+
+======================================================================
+Testing with 4 Worker(s)
+======================================================================
+
+  4W @ 50,000 pkt/s: FAILED (server crashed)
+
+  4W @ 100,000 pkt/s: FAILED (server crashed)
+
+  4W @ 150,000 pkt/s: FAILED (server crashed)
+
+  4W @ 200,000 pkt/s: FAILED (server crashed)
+
+================================================================================
+SUMMARY: Multi-Worker Scaling Results
+================================================================================
+ Workers |  Target Rate |  Actual Rate |         Sent |     Received |   Loss %
+--------------------------------------------------------------------------------
+       1 |       50,000 |       49,999 |      499,999 |      499,999 |     0.00%
+       1 |      100,000 |       99,998 |      999,992 |      999,992 |     0.00%
+       1 |      150,000 |      149,995 |    1,499,991 |    1,350,599 |     9.96%
+       1 |      200,000 |      164,160 |    1,642,404 |    1,187,010 |    27.73%
+
+================================================================================
+SCALING ANALYSIS
+================================================================================
+  1 Worker(s): Zero-loss threshold ≈ 100,000 pkt/s
+  2 Worker(s): No zero-loss achieved in tested range
+  4 Worker(s): No zero-loss achieved in tested range
+
+Results saved to multi_worker_results.json and multi_worker_results.csv

@@ -19,7 +19,7 @@
 
 ## 2. 最新基准测试结果 (2024年12月14日)
 
-### 2.1 Windows 测试结果 (asyncio, 16MB UDP Buffer)
+### 2.1 Windows 单 Worker 测试结果 (asyncio, 16MB UDP Buffer)
 
 | 速率 (pkt/s) | 发送 | 接收 | 丢包率 | 评价 |
 |-------------|------|------|--------|------|
@@ -33,7 +33,22 @@
 
 **Windows 零丢包阈值: 120,000 pkt/s** 🚀
 
-### 2.2 Linux 测试结果 (Docker + uvloop)
+### 2.2 Windows 多 Worker 测试结果
+
+| Workers | 50K pkt/s | 100K pkt/s | 150K pkt/s | 200K pkt/s |
+|---------|-----------|------------|------------|------------|
+| 1 | 0.00% ✅ | 0.00% ✅ | 9.96% ❌ | 27.73% ❌ |
+| 2 | N/A | N/A | N/A | N/A |
+| 4 | N/A | N/A | N/A | N/A |
+
+**⚠️ Windows 多 Worker 限制**
+
+Windows **不支持 `SO_REUSEPORT`**，因此多个 Worker 进程无法绑定同一个 UDP 端口。这意味着：
+
+- **Windows**: 只能使用单 Worker 模式
+- **Linux**: 可以使用多 Worker 模式，预期线性扩展 (2W ≈ 160k, 4W ≈ 320k pkt/s)
+
+### 2.3 Linux 测试结果 (Docker + uvloop)
 
 | 速率 (pkt/s) | 发送 | 接收 | 丢包率 | 评价 |
 |-------------|------|------|--------|------|
