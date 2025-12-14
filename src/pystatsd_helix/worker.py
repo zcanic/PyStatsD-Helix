@@ -209,10 +209,18 @@ def run_worker_process(config: ServerConfig, worker_id: int, heartbeat_shared_va
     )
     
     # 2. Setup uvloop
-    if uvloop:
-        asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+    disable_uvloop = os.environ.get("PYSTATSD_DISABLE_UVLOOP", "0") == "1"
+    if uvloop and not disable_uvloop:
+        try:
+            asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+            logging.info("Using uvloop event loop.")
+        except Exception as e:
+            logging.warning(f"Failed to set uvloop policy: {e}. Falling back to standard asyncio.")
     else:
-        logging.warning("uvloop not found! Falling back to standard asyncio loop. Performance will be degraded.")
+        if disable_uvloop:
+            logging.info("uvloop disabled via environment variable.")
+        else:
+            logging.warning("uvloop not found! Falling back to standard asyncio loop. Performance will be degraded.")
 
     # 3. Run Worker
     worker = Worker(worker_id, config, heartbeat_shared_value, metrics_received_shared_value)
